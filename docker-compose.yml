@@ -1,4 +1,4 @@
-version: '3.8'
+# docker-compose.yml
 
 services:
   db:
@@ -7,49 +7,39 @@ services:
     restart: always
     environment:
       MYSQL_DATABASE: jobapplication
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: rootpassword   # change as needed
+      MYSQL_USER: user
+      MYSQL_PASSWORD: userpassword       # change as needed
     ports:
       - "3306:3306"
     volumes:
-      - jobapp_db_data:/var/lib/mysql
-    networks:
-      - jobapp-net
+      - db_data:/var/lib/mysql
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.backend
     container_name: jobapp-backend
     restart: always
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/jobapplication
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-    depends_on:
-      - db
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: userpassword
     ports:
       - "8080:8080"
-    networks:
-      - jobapp-net
+    depends_on:
+      - db
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.frontend
     container_name: jobapp-frontend
     restart: always
     ports:
       - "3000:80"
-
     depends_on:
       - backend
-    networks:
-      - jobapp-net
 
 volumes:
-  jobapp_db_data:
-
-networks:
-  jobapp-net:
-    driver: bridge
+  db_data:
