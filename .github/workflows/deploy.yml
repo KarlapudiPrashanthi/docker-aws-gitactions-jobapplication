@@ -4,41 +4,32 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:   # allow manual run from GitHub UI
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout this repo (optional, mainly for workflow files)
+      # Step 1: Checkout the repo
       - name: Checkout Repo
         uses: actions/checkout@v3
 
-      # Step 2: Debug - list files in repo
-      - name: List repo files
-        run: ls -R
-
-      # Step 3: SSH into EC2 and deploy
+      # Step 2: SSH into EC2 and deploy
       - name: Deploy on EC2
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@v1.6.0
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
+          host: ${{ secrets.EC2_HOST }}         # your EC2 host (3.236.81.110)
+          username: ubuntu                       # default for Ubuntu EC2
+          key: ${{ secrets.EC2_SSH_KEY }}       # your private SSH key stored in GitHub secrets
           script_stop: true
           debug: true
           script: |
-            cd ~
-            mkdir -p jobapp-fullstack
-            cd jobapp-fullstack
+            echo "Starting deployment on myserver..."
 
-            # Install Git if missing
-            if ! command -v git &> /dev/null; then
-              echo "Installing Git..."
-              sudo apt-get update -y
-              sudo apt-get install -y git
-            fi
+            # Create project folder if not exists
+            mkdir -p ~/docker-aws-gitactions-jobapplication
+            cd ~/docker-aws-gitactions-jobapplication
 
             # Install Docker if missing
             if ! command -v docker &> /dev/null; then
@@ -71,22 +62,52 @@ jobs:
             # Create docker-compose.yml
             cat > docker-compose.yml <<EOL
 version: '3.9'
+
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.backend
     container_name: jobapp-backend
     ports:
       - "8080:8080"
     restart: always
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/jobapplication
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
     container_name: jobapp-frontend
     ports:
       - "3000:80"
     restart: always
-EOL
+    depends_on:
+      - backend
 
-            # Stop old containers, rebuild, and restart
+  db:
+    image: mysql:8.0
+    container_name: jobapp-db
+    restart: always
+    environment:
+      MYSQL_DATABASE: jobapplication
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_USER: user
+      MYSQL_PASSWORD: userpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - jobapp_db_data:/var/lib/mysql
+
+volumes:
+  jobapp_db_data: {}
+            EOL
+
+            # Stop old containers, rebuild, and start
             sudo docker compose down
             sudo docker compose up -d --build
+
+            echo "Deployment finished successfully!"

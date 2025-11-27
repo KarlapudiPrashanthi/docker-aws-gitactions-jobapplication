@@ -19,7 +19,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ./JobapplicationT-backend
       dockerfile: Dockerfile.backend
     container_name: jobapp-backend
     restart: always
@@ -37,7 +37,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./JobApplicationT
       dockerfile: Dockerfile.frontend
     container_name: jobapp-frontend
     restart: always
