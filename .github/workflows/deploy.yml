@@ -4,26 +4,23 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch:   # allow manual run from GitHub UI
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout this repo (optional, mainly for workflow files)
       - name: Checkout Repo
         uses: actions/checkout@v3
 
-      - name: Copy repo to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "./*"
-          target: /home/ubuntu/jobapp-fullstack
+      # Step 2: Debug - list files in repo
+      - name: List repo files
+        run: ls -R
 
-      - name: Deploy on EC2 with Docker Compose
+      # Step 3: SSH into EC2 and deploy
+      - name: Deploy on EC2
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -32,10 +29,20 @@ jobs:
           script_stop: true
           debug: true
           script: |
-            cd ~/jobapp-fullstack
+            cd ~
+            mkdir -p jobapp-fullstack
+            cd jobapp-fullstack
+
+            # Install Git if missing
+            if ! command -v git &> /dev/null; then
+              echo "Installing Git..."
+              sudo apt-get update -y
+              sudo apt-get install -y git
+            fi
 
             # Install Docker if missing
             if ! command -v docker &> /dev/null; then
+              echo "Installing Docker..."
               sudo apt-get update -y
               sudo apt-get install -y ca-certificates curl gnupg lsb-release
               sudo mkdir -p /etc/apt/keyrings
@@ -47,6 +54,39 @@ jobs:
               sudo systemctl start docker
             fi
 
-            # Stop old containers and deploy
+            # Clone or pull backend repo
+            if [ -d backend ]; then
+              cd backend && git pull && cd ..
+            else
+              git clone https://github.com/KarlapudiPrashanthi/JobapplicationT-backend backend
+            fi
+
+            # Clone or pull frontend repo
+            if [ -d frontend ]; then
+              cd frontend && git pull && cd ..
+            else
+              git clone https://github.com/KarlapudiPrashanthi/JobApplicationT frontend
+            fi
+
+            # Create docker-compose.yml
+            cat > docker-compose.yml <<EOL
+version: '3.9'
+services:
+  backend:
+    build: ./backend
+    container_name: jobapp-backend
+    ports:
+      - "8080:8080"
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: jobapp-frontend
+    ports:
+      - "3000:80"
+    restart: always
+EOL
+
+            # Stop old containers, rebuild, and restart
             sudo docker compose down
             sudo docker compose up -d --build
